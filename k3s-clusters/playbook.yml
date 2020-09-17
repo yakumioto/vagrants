@@ -1,0 +1,70 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Install docker
+      apk:
+        name: docker
+        state: latest
+        update_cache: yes
+    - name: Add vagrant user to docker group
+      shell: addgroup vagrant docker
+    - name: Update rc and running docker
+      shell: rc-update add docker boot; service docker start
+  
+- hosts: master
+  become: yes
+  tasks:
+    - name: Install K3S server
+      shell: |
+        curl -sfL https://get.k3s.io | \
+          K3S_NODE_NAME="master" \
+          K3S_KUBECONFIG_MODE="644" \
+          sh -s - \
+            --node-ip {{ ansible_eth1.ipv4.address }} \
+            --docker
+      environment:
+        http_proxy: "{{ proxy }}"
+        https_proxy: "{{ proxy }}"
+    - name: Wait for K3S
+      pause:
+        seconds: "10"
+    - name: Get K3S token
+      shell: |
+        cat /var/lib/rancher/k3s/server/node-token
+      register: token
+    - name: Remove old join shell script
+      shell: |
+        rm -rf join_command.sh
+    - name: Generate join shell script
+      lineinfile:
+        path: join_command.sh
+        create: true
+        line: |
+          #!/bin/sh
+          curl -sfL https://get.k3s.io | \
+            K3S_URL=https://{{ ansible_eth1.ipv4.address }}:6443 \
+            K3S_TOKEN={{ token.stdout }} \
+            K3S_NODE_NAME="${HOSTNAME}" \
+            K3S_KUBECONFIG_MODE="644" \
+            sh -s - \
+              --node-ip $(ifconfig eth1 | grep 'inet addr' | cut -d: -f2 | awk '{print $1}') \
+              --docker
+    - name: Export join shell script
+      fetch:
+        src: join_command.sh
+        dest: join_command.sh
+        flat: yes
+
+- hosts: nodes
+  tasks:
+    - name: Copy join shell script
+      copy:
+        src: join_command.sh
+        dest: join_command.sh
+    - name: Install k3s client
+      shell: |
+        sh join_command.sh
+      environment:
+        http_proxy: "{{ proxy }}"
+        https_proxy: "{{ proxy }}"

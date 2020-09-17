@@ -1,0 +1,41 @@
+Vagrant.configure('2') do |config|
+    config.vm.define "master" do |master|
+        master.vm.provider "virtualbox" do |v|
+            v.name = "k3s-master"
+            v.memory = 2048
+            v.cpus = 2
+        end
+
+        master.vm.box = "generic/alpine312"
+        master.vm.network "private_network", ip: "192.168.11.10"
+        master.vm.hostname = "master"
+    end
+
+    (1..2).each do |i|
+        config.vm.define "node#{i}" do |node|
+            node.vm.provider "virtualbox" do |v|
+                v.name = "k8s-node#{i}"
+                v.memory = 2048
+                v.cpus = 2
+            end
+            
+            node.vm.box = "generic/alpine312"
+            node.vm.network "private_network", ip: "192.168.11.1#{i}"
+            node.vm.hostname = "node#{i}"
+        end
+    end
+
+    config.vm.provision "bootstrap", type: "shell" do |bootstrap|
+        bootstrap.inline = 'sed -i "s/sjc.edge.kernel.org/mirrors.aliyun.com/g" /etc/apk/repositories;apk update;apk add python3'
+    end
+
+    config.vm.provision "deploy", type: "ansible" do |ansible|
+        ansible.playbook = "playbook.yml"
+        ansible.groups = {
+            "nodes" => ["node[1:2]"]
+        }
+        ansible.extra_vars = {
+            proxy: "http://192.168.10.1:8123"
+        }
+    end
+end
