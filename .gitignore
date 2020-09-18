@@ -1,2 +1,6 @@
 .vagrant
 .log
+
+# k3s-clusters
+
+join_command.sh
