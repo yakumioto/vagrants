@@ -42,3 +42,13 @@ vagrant up --no-provision && \
   vagrant provision --provision-with bootstrap && \
   PROXY_URL="{your_proxy}" vagrant provision --provision-with deploy
 ```
+
+## 使用本机的 kubectl
+
+将 k3s-clusters 下的 config 复制到 ~/.kube/ 目录下
+
+```bash
+cp config ~/.kube/config
+```
+
+已有其他的 k8s 环境，需要手动编辑 ~/.kube/config 进行整合。
